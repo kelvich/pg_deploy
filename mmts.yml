@@ -1,15 +1,15 @@
 - hosts: all
 
-  vars:
-    pg_port: 15432
-    pg_prefix: "{{ansible_env.HOME}}/pg_cluster"
-    pg_src: "{{pg_prefix}}/src"
-    pg_dst: "{{pg_prefix}}/install"
-    pg_datadir: "{{pg_prefix}}/data_{{pg_port}}"
-    pg_repo: https://github.com/postgrespro/postgres_cluster.git
-    pg_version_tag: master
-    pg_destroy_and_init: true
-    makejobs: 4
+#   vars:
+#     pg_port: 15432
+#     pg_prefix: "{{ansible_env.HOME}}/pg_cluster"
+#     pg_src: "{{pg_prefix}}/src"
+#     pg_dst: "{{pg_prefix}}/install"
+#     pg_datadir: "{{pg_prefix}}/data_{{pg_port}}"
+#     pg_repo: https://github.com/postgrespro/postgres_cluster.git
+#     pg_version_tag: master
+#     pg_destroy_and_init: true
+#     makejobs: 4
 
 ###############################################################
 
