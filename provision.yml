@@ -32,6 +32,7 @@
 
   - name: increase semaphores
     sysctl: name=kernel.sem value="1000 128000 128 512"
+    when: ansible_os_family == "RedHat"
     become: yes
 
   - name: increase open files
@@ -40,6 +41,7 @@
       line: "{{ansible_ssh_user}}  soft  nofile  65535"
       state: present
       create: yes
+    when: ansible_os_family == "RedHat"
     become: yes
 
   - name: clone postgres sources

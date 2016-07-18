@@ -93,7 +93,7 @@
 
   - name: create master node
     shell: |
-      psql -p {{pg_port}} postgres <<-SQL
+      psql -p {{pg_port}} postgres <<SQL
         CREATE EXTENSION pglogical;
         SELECT pglogical.create_node(
           node_name := 'provider',
@@ -108,17 +108,17 @@
 
   tasks:
 
-  - name: create master node
+  - name: create subscription on slave node
     shell: |
-      psql -p {{pg_port}} postgres <<-SQL
+      psql -p {{pg_port}} postgres <<SQL
         CREATE EXTENSION pglogical;
         SELECT pglogical.create_node(
           node_name := 'subscriber',
           dsn := 'port={{pg_port}} dbname=postgres'
         );
         SELECT pglogical.create_subscription(
-          subscription_name := 'subscription_{{ ansible_hostname }}',
-          provider_dsn := 'port={{pg_port}} dbname=postgres host=192.168.27.21', --!!!
+          subscription_name := 'subscription_{{ node_id }}',
+          provider_dsn := 'port={{hostvars[groups['nodes'] | first]['pg_port'] }} dbname=postgres host={{hostvars[groups['nodes'] | first]['ansible_host'] }}',
           synchronize_data := true,
           forward_origins := '{}',
           synchronize_structure := false
