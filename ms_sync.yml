@@ -1,0 +1,116 @@
+- hosts: all
+
+  # vars:
+  #   pg_port: 15432
+  #   pg_prefix: "{{ansible_env.HOME}}/pg_cluster"
+  #   pg_src: "{{pg_prefix}}/src"
+  #   pg_dst: "{{pg_prefix}}/install"
+  #   pg_datadir: "{{pg_prefix}}/data_{{pg_port}}"
+  #   pg_repo: https://github.com/postgrespro/postgres_cluster.git
+  #   pg_version_tag: master
+  #   pg_destroy_and_init: true
+  #   makejobs: 4
+
+###############################################################
+
+  tasks:
+
+  - include: provision.yml
+
+  - name: stop postgres if it was running
+    shell: "pkill -9 postgres || true"
+    when: pg_destroy_and_init
+
+  - name: remove datadirs on datanodes
+    command: "rm -rf {{pg_datadir}}"
+    when: pg_destroy_and_init
+
+- hosts: nodes[0]
+
+  tasks:
+
+  - name: create datadirs on datanodes
+    command: "{{pg_dst}}/bin/initdb {{pg_datadir}}"
+    environment:
+      LD_LIBRARY_PATH: "{{pg_dst}}/lib/"
+    args:
+      creates: "{{pg_datadir}}"
+
+  - name: configure postgres on datanodes
+    lineinfile:
+      dest: "{{pg_datadir}}/postgresql.conf"
+      line: "{{item}}"
+      state: present
+    with_items:
+    - "listen_addresses = '*'"
+    - "max_prepared_transactions = 800"
+    - "shared_buffers = 3GB"
+    - "max_connections = 2048"
+    - "port = {{pg_port}}"
+    # sync rep behaves strangely with sync_commit = off
+    - "synchronous_commit = remote_apply"
+    - "fsync = off"
+    - "wal_level = logical"
+    - "max_worker_processes = 15"
+    - "max_replication_slots = 10"
+    - "max_wal_senders = 10"
+    - "max_worker_processes = 30"
+    - "log_checkpoints = on"
+    - "log_autovacuum_min_duration = 0"
+
+  - name: enable blind trust on datanodes
+    lineinfile:
+      dest: "{{pg_datadir}}/pg_hba.conf"
+      line: "{{item}}"
+      state: present
+    with_items:
+      - "host all all 0.0.0.0/0 trust"
+      - "host replication all 0.0.0.0/0 trust"
+      - "local replication all trust"
+
+  - name: start postgres
+    shell: "ulimit -c unlimited && {{pg_dst}}/bin/pg_ctl start -w -D {{pg_datadir}} -l {{pg_datadir}}/pg.log"
+    environment:
+      LD_LIBRARY_PATH: "{{pg_dst}}/lib/"
+
+  # - postgresql_db: name=cluster
+
+- hosts: nodes[1:]
+
+  tasks:
+
+  - name: generate mmts connstrings
+    set_fact:
+      master_connstr: "host={{groups['nodes'] | first}} user={{ansible_ssh_user}} port={{pg_port}} dbname=postgres"
+
+  - debug: var=master_connstr
+
+  - name: basebackup
+    shell: "{{pg_dst}}/bin/pg_basebackup -D {{pg_datadir}} -R -d '{{master_connstr}}'"
+
+  - name: configure postgres on datanodes
+    lineinfile:
+      dest: "{{pg_datadir}}/postgresql.conf"
+      line: "hot_standby = on"
+      state: present
+
+  - name: start postgres
+    shell: "ulimit -c unlimited && {{pg_dst}}/bin/pg_ctl start -w -D {{pg_datadir}} -l {{pg_datadir}}/pg.log"
+    environment:
+      LD_LIBRARY_PATH: "{{pg_dst}}/lib/"
+
+
+- hosts: nodes[0]
+
+  tasks:
+
+  - name: configure postgres on datanodes
+    lineinfile:
+      dest: "{{pg_datadir}}/postgresql.conf"
+      line: "synchronous_standby_names = '2(*)'"
+      state: present
+
+  - name: restart postgres
+    shell: "ulimit -c unlimited && {{pg_dst}}/bin/pg_ctl restart -w -D {{pg_datadir}} -l {{pg_datadir}}/pg.log"
+    environment:
+      LD_LIBRARY_PATH: "{{pg_dst}}/lib/"
